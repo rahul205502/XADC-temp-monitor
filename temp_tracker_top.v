@@ -1,15 +1,17 @@
 `timescale 1ns / 1ps
 
 module temp_tracker_top (
-    input  wire        clk,
+    input  wire        clk,        // 100 MHz
     input  wire        rst,
-    input  wire        enable,
-    output wire        uart_tx
+    input  wire        enable,     // UART send enable
+    output wire        uart_tx,
+    output wire [6:0]  seg,
+    output wire [3:0]  an
 );
 
-    // ============================
+    // ============================================================
     // XADC Interface
-    // ============================
+    // ============================================================
     wire [15:0] xadc_do;
     wire        xadc_drdy;
 
@@ -22,9 +24,9 @@ module temp_tracker_top (
         .drdy_out  (xadc_drdy)
     );
 
-    // ============================
+    // ============================================================
     // Temperature Register
-    // ============================
+    // ============================================================
     reg [15:0] temp_raw;
 
     always @(posedge clk) begin
@@ -34,26 +36,39 @@ module temp_tracker_top (
             temp_raw <= xadc_do;
     end
 
-    // ============================
-    // Raw ? Celsius (Integer)
-    // Temp ? (raw * 504 >> 16) - 273
-    // ============================
+    // ============================================================
+    // Raw ? Celsius (integer)
+    // T(°C) ? (raw * 504 >> 16) - 273
+    // ============================================================
     wire signed [15:0] temp_c;
 
-    assign temp_c = ((temp_raw * 16'd504) >> 16) - 16'd273;
+    assign temp_c = ((temp_raw * 16'd504) >>> 16) - 16'sd273;
 
-    // ============================
+    // ============================================================
     // UART Transmission
-    // ============================
+    // ============================================================
     uart_tx #(
         .CLK_FREQ(100_000_000),
         .BAUD(115200)
     ) uart_inst (
         .clk   (clk),
         .rst   (rst),
+        .en    (enable),
         .send  (enable),
         .data  (temp_c),
         .tx    (uart_tx)
+    );
+
+    // ============================================================
+    // Seven-Segment Display
+    // (Only temperature, integer °C)
+    // ============================================================
+    top_temp_7seg disp_inst (
+        .clk    (clk),
+        .rst    (rst),
+        .temp_c (temp_c[7:0]),  // display absolute integer value
+        .seg    (seg),
+        .an     (an)
     );
 
 endmodule
