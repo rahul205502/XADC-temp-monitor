@@ -1,74 +1,80 @@
-`timescale 1ns / 1ps
 
 module temp_tracker_top (
-    input  wire        clk,        // 100 MHz
-    input  wire        rst,
-    input  wire        enable,     // UART send enable
-    output wire        uart_tx,
-    output wire [6:0]  seg,
-    output wire [3:0]  an
+    input  clk,
+    input  rst,
+    output tx,
+    output [6:0] seg,
+    output [3:0] an
 );
 
-    // ============================================================
-    // XADC Interface
-    // ============================================================
-    wire [15:0] xadc_do;
-    wire        xadc_drdy;
+    /* =====================================================
+       1. XADC INTERFACE (UG480 compliant)
+       ===================================================== */
 
-    xadc_wiz_0 xadc_inst (
+    wire [15:0] xadc_raw;
+    wire [11:0] adc_code;
+
+    assign adc_code = xadc_raw[15:4];
+
+    xadc_wiz_0 XADC (
         .dclk_in   (clk),
-        .reset_in  (rst),
         .den_in    (1'b1),
-        .daddr_in  (7'h00),   // Temperature channel
-        .do_out    (xadc_do),
-        .drdy_out  (xadc_drdy)
+        .daddr_in  (7'h00),  
+        .do_out    (xadc_raw),
+        .drdy_out  (),
+        .reset_in  (rst)
     );
 
-    // ============================================================
-    // Temperature Register
-    // ============================================================
-    reg [15:0] temp_raw;
+    /* =====================================================
+       2. TEMPERATURE CONVERSION (°C × 100)
+       UG480: T = (ADC × 503.975 / 4096) - 273.15
+       ===================================================== */
+
+    reg signed [31:0] temp_x100;
 
     always @(posedge clk) begin
-        if (rst)
-            temp_raw <= 16'd0;
-        else if (xadc_drdy)
-            temp_raw <= xadc_do;
+        temp_x100 <= ((adc_code * 50397) >>> 12) - 27315;
     end
 
-    // ============================================================
-    // Raw ? Celsius (integer)
-    // T(�C) ? (raw * 504 >> 16) - 273
-    // ============================================================
-    wire signed [15:0] temp_c;
+    /* =====================================================
+       3. UART TRANSMITTER 
+       ===================================================== */
 
-    assign temp_c = ((temp_raw * 16'd504) >>> 16) - 16'sd273;
+    wire uart_busy;
+    reg  uart_start;
 
-    // ============================================================
-    // UART Transmission
-    // ============================================================
-    uart_tx #(
-        .CLK_FREQ(100_000_000),
-        .BAUD(115200)
-    ) uart_inst (
-        .clk   (clk),
-        .rst   (rst),
-        .en    (enable),
-        .send  (enable),
-        .data  (temp_c),
-        .tx    (uart_tx)
+    reg [26:0] tx_timer;
+    always @(posedge clk) begin
+        if (rst) begin
+            tx_timer  <= 0;
+            uart_start <= 1'b0;
+        end else if (tx_timer == 27'd100_000_000) begin
+            tx_timer  <= 0;
+            uart_start <= 1'b1;
+        end else begin
+            tx_timer  <= tx_timer + 1;
+            uart_start <= 1'b0;
+        end
+    end
+
+    uart_temp_tx UART_TX (
+        .clk       (clk),
+        .rst       (rst),
+        .start     (uart_start & ~uart_busy),
+        .temp_x100 (temp_x100),
+        .tx        (tx),
+        .busy      (uart_busy)
     );
 
-    // ============================================================
-    // Seven-Segment Display
-    // (Only temperature, integer �C)
-    // ============================================================
-    top_temp_7seg disp_inst (
-        .clk    (clk),
-        .rst    (rst),
-        .temp_c (temp_c[7:0]),  // display absolute integer value
-        .seg    (seg),
-        .an     (an)
+    /* =====================================================
+       4. SEVEN-SEGMENT DISPLAY (integer °C)
+       ===================================================== */
+
+    seven_seg_temp SEVENSEG (
+        .clk       (clk),
+        .temp_x100 (temp_x100),
+        .seg       (seg),
+        .an        (an)
     );
 
 endmodule
