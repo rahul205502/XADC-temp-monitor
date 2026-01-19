@@ -1,233 +1,23 @@
-//module uart_tx #(
-//    parameter CLK_FREQ = 100_000_000,
-//    parameter BAUD     = 115200
-//)(
-//    input  wire        clk,
-//    input  wire        rst,
-//    input  wire        en,
-//    input  wire        send,
-//    input  wire signed [11:0] data,
-//    output reg         tx
-//);
-
-//    // ============================
-//    // Baud generator
-//    // ============================
-//    localparam integer BAUD_DIV = CLK_FREQ / BAUD;
-
-//    reg [$clog2(BAUD_DIV)-1:0] baud_cnt;
-//    reg baud_tick;
-
-//    always @(posedge clk) begin
-//        if (!en) begin
-//            baud_cnt  <= 0;
-//            baud_tick <= 0;
-//        end else if (baud_cnt == BAUD_DIV-1) begin
-//            baud_cnt  <= 0;
-//            baud_tick <= 1;
-//        end else begin
-//            baud_cnt  <= baud_cnt + 1;
-//            baud_tick <= 0;
-//        end
-//    end
-
-//    // ============================
-//    // UART FSM
-//    // ============================
-//    localparam IDLE  = 0,
-//               START = 1,
-//               DATA  = 2,
-//               STOP  = 3;
-
-//    reg [1:0] state;
-//    reg [3:0] bit_cnt;
-//    reg [2:0] msg_idx;
-//    reg [7:0] tx_byte;
-
-//    reg [11:0] abs_temp;
-
-//    // Message buffer: "T=XYZC\r\n"
-//    reg [7:0] msg [0:7];
-
-//    // ============================
-//    // UART transmitter
-//    // ============================
-//    always @(posedge clk) begin
-//        if (!en || rst) begin
-//            state   <= IDLE;
-//            tx      <= 1'b1;
-//            bit_cnt <= 0;
-//            msg_idx <= 0;
-//        end else if (baud_tick) begin
-//            case (state)
-
-//                // ----------------------------
-//                IDLE: begin
-//                    tx <= 1'b1;
-//                    if (send) begin
-//                        abs_temp <= (data < 0) ? -data : data;
-
-//                        msg[0] <= "T";
-//                        msg[1] <= "=";
-//                        msg[2] <= (abs_temp / 100) + 8'd48;
-//                        msg[3] <= ((abs_temp / 10) % 10) + 8'd48;
-//                        msg[4] <= (abs_temp % 10) + 8'd48;
-//                        msg[5] <= "C";
-//                        msg[6] <= 8'h0D;
-//                        msg[7] <= 8'h0A;
-
-//                        msg_idx <= 0;
-//                        tx_byte <= msg[0];
-//                        state   <= START;
-//                    end
-//                end
-
-//                // ----------------------------
-//                START: begin
-//                    tx      <= 1'b0;   // Start bit
-//                    bit_cnt <= 0;
-//                    state   <= DATA;
-//                end
-
-//                // ----------------------------
-//                DATA: begin
-//                    tx <= tx_byte[bit_cnt];
-//                    if (bit_cnt == 7)
-//                        state <= STOP;
-//                    else
-//                        bit_cnt <= bit_cnt + 1;
-//                end
-
-//                // ----------------------------
-//                STOP: begin
-//                    tx <= 1'b1;  // Stop bit
-//                    if (msg_idx == 7) begin
-//                        state <= IDLE;
-//                    end else begin
-//                        msg_idx <= msg_idx + 1;
-//                        tx_byte <= msg[msg_idx + 1];
-//                        state   <= START;
-//                    end
-//                end
-
-//            endcase
-//        end
-//    end
-
-//endmodule
-
-
-//module uart_tx #(
-//    parameter CLK_FREQ = 100_000_000,
-//    parameter BAUD     = 115200
-//)(
-//    input  wire        clk,
-//    input  wire        rst,
-//    input  wire        en,
-//    input  wire        send,
-//    input  wire [15:0] data,   // temperature value
-//    output reg         tx
-//);
-
-//    // ============================
-//    // Baud generator
-//    // ============================
-//    localparam integer BAUD_DIV = CLK_FREQ / BAUD;
-
-//    reg [$clog2(BAUD_DIV)-1:0] baud_cnt;
-//    reg baud_tick;
-
-//    always @(posedge clk) begin
-//        if (!en) begin
-//            baud_cnt  <= 0;
-//            baud_tick <= 0;
-//        end else if (baud_cnt == BAUD_DIV-1) begin
-//            baud_cnt  <= 0;
-//            baud_tick <= 1;
-//        end else begin
-//            baud_cnt  <= baud_cnt + 1;
-//            baud_tick <= 0;
-//        end
-//    end
-
-//    // ============================
-//    // UART FSM
-//    // ============================
-//    localparam IDLE  = 0,
-//               START = 1,
-//               DATA  = 2,
-//               STOP  = 3;
-
-//    reg [1:0]  state;
-//    reg [4:0]  bit_cnt;     // counts 0-15
-//    reg [15:0] shift_reg;
-
-//    always @(posedge clk) begin
-//        if (!en || rst) begin
-//            state   <= IDLE;
-//            tx      <= 1'b1;
-//            bit_cnt <= 0;
-//        end else if (baud_tick) begin
-//            case (state)
-
-//                IDLE: begin
-//                    tx <= 1'b1;
-//                    if (send) begin
-//                        shift_reg <= data;
-//                        bit_cnt   <= 0;
-//                        state     <= START;
-//                    end
-//                end
-
-//                START: begin
-//                    tx    <= 1'b0;   // start bit
-//                    state <= DATA;
-//                end
-
-//                DATA: begin
-//                    tx <= shift_reg[bit_cnt];
-//                    if (bit_cnt == 16)
-//                        state <= STOP;
-//                    else
-//                        bit_cnt <= bit_cnt + 1;
-//                end
-
-//                STOP: begin
-//                    tx    <= 1'b1;   // stop bit
-//                    state <= IDLE;
-//                end
-
-//            endcase
-//        end
-//    end
-
-//endmodule
-
-module uart_tx #(
+module uart_temp_tx #(
     parameter CLK_FREQ = 100_000_000,
-    parameter BAUD     = 115200
+    parameter BAUD     = 9600
 )(
     input  wire        clk,
     input  wire        rst,
-    input  wire        en,
-    input  wire        send,
-    input  wire [15:0] data,
-    output reg         tx
+    input  wire        start,
+    input  wire signed [31:0] temp_x100,
+    output reg         tx,
+    output reg         busy
 );
 
-    // ============================
-    // Baud generator
-    // ============================
-    localparam integer BAUD_DIV = CLK_FREQ / BAUD;
+    localparam BAUD_DIV = CLK_FREQ / BAUD;
 
-    reg [$clog2(BAUD_DIV)-1:0] baud_cnt;
-    reg baud_tick;
+    // ---------------- Baud generator ----------------
+    reg [13:0] baud_cnt;
+    reg        baud_tick;
 
     always @(posedge clk) begin
-        if (!en) begin
-            baud_cnt  <= 0;
-            baud_tick <= 0;
-        end else if (baud_cnt == BAUD_DIV-1) begin
+        if (baud_cnt == BAUD_DIV-1) begin
             baud_cnt  <= 0;
             baud_tick <= 1;
         end else begin
@@ -236,61 +26,100 @@ module uart_tx #(
         end
     end
 
-    // ============================
-    // UART FSM
-    // ============================
-    localparam IDLE  = 2'd0,
-               START = 2'd1,
-               DATA  = 2'd2,
-               STOP  = 2'd3;
+    // ---------------- UART registers ----------------
+    reg [3:0]  state;
+    reg [7:0]  shifter;
+    reg [2:0]  bit_cnt;
+    reg [3:0]  char_idx;
 
-    reg [1:0]  state;
-    reg [4:0]  bit_cnt;
-    reg [15:0] shift_reg;
+    // ---------------- Temperature pipeline ----------------
+    reg signed [31:0] temp_val;
+    reg        sign;
+    reg [31:0] temp_abs;
+    reg [3:0]  digits [0:4];  // H, T, O, f1, f2
+    reg [2:0]  digit_step;
 
+    function [7:0] ascii;
+        input [3:0] d;
+        ascii = d + 8'd48;
+    endfunction
+
+    // ---------------- Main FSM ----------------
     always @(posedge clk) begin
-        if (!en) begin
-            // Hard gate: absolutely no output
-            state   <= IDLE;
-            tx      <= 1'b1;
-            bit_cnt <= 0;
-        end else if (rst) begin
-            // Reset causes a single transmission of 16'h0000
-            shift_reg <= 16'h0000;
+        if (rst) begin
+            tx        <= 1'b1;
+            busy      <= 1'b0;
+            state     <= 0;
+            char_idx  <= 0;
             bit_cnt   <= 0;
-            state     <= START;
-        end else if (baud_tick) begin
+            digit_step<= 0;
+        end
+
+        // ----------- Start transaction -----------
+        else if (start && !busy) begin
+            temp_val   <= temp_x100;
+            sign       <= (temp_x100 < 0);
+            temp_abs   <= (temp_x100 < 0) ? -temp_x100 : temp_x100;
+            digit_step <= 0;
+            busy       <= 1;
+            state      <= 10;   // go to digit extraction
+        end
+
+        // ----------- Digit extraction (1 digit / cycle) -----------
+        else if (state == 10) begin
+            case (digit_step)
+                0: begin digits[0] <= (temp_abs / 10000); temp_abs <= temp_abs % 10000; end
+                1: begin digits[1] <= (temp_abs / 1000 ); temp_abs <= temp_abs % 1000;  end
+                2: begin digits[2] <= (temp_abs / 100  ); temp_abs <= temp_abs % 100;   end
+                3: begin digits[3] <= (temp_abs / 10   ); temp_abs <= temp_abs % 10;    end
+                4: begin digits[4] <=  temp_abs;         state    <= 1; char_idx <= 0; end
+            endcase
+            digit_step <= digit_step + 1;
+        end
+
+        // ----------- UART FSM (baud-tick only) -----------
+        else if (busy && baud_tick) begin
             case (state)
 
-                IDLE: begin
-                    tx <= 1'b1;
-                    if (send) begin
-                        shift_reg <= data;
-                        bit_cnt   <= 0;
-                        state     <= START;
+                1: begin
+                    case (char_idx)
+                        0: shifter <= sign ? "-" : "+";
+                        1: shifter <= ascii(digits[0]);
+                        2: shifter <= ascii(digits[1]);
+                        3: shifter <= ascii(digits[2]);
+                        4: shifter <= ".";
+                        5: shifter <= ascii(digits[3]);
+                        6: shifter <= ascii(digits[4]);
+                        7: shifter <= 8'h0D;
+                        8: shifter <= 8'h0A;
+                    endcase
+                    tx      <= 0;
+                    bit_cnt <= 0;
+                    state   <= 2;
+                end
+
+                2: begin
+                    tx <= shifter[bit_cnt];
+                    bit_cnt <= bit_cnt + 1;
+                    if (bit_cnt == 7)
+                        state <= 3;
+                end
+
+                3: begin
+                    tx    <= 1;
+                    state <= 4;
+                end
+
+                4: begin
+                    char_idx <= char_idx + 1;
+                    if (char_idx == 8) begin
+                        busy  <= 0;
+                        state <= 0;
+                    end else begin
+                        state <= 1;
                     end
                 end
-
-                START: begin
-                    tx    <= 1'b0;   // start bit
-                    state <= DATA;
-                end
-
-                DATA: begin
-                    tx <= shift_reg[bit_cnt];
-                    if (bit_cnt == 15)
-                        state <= STOP;
-                    else
-                        bit_cnt <= bit_cnt + 1;
-                end
-
-                STOP: begin
-                    tx    <= 1'b1;   // stop bit
-                    state <= IDLE;
-                end
-
             endcase
         end
     end
-
 endmodule
